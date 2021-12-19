@@ -18,8 +18,6 @@ const std = @import("std");
 const gc = @import("gc");
 const GcAllocator = gc.GcAllocator;
 
-/// Example is a F to C conversion from zig.news. The only argument is
-/// temperature in farenheight and then it outputs in celsius.
 pub fn main() !void {
     var alloc = gc.allocator();
 
