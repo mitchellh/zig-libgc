@@ -5,22 +5,29 @@ This library implements a Zig allocator that uses the
 Values allocated within this allocator do not need to be explicitly
 freed.
 
+**Should I use a GC with Zig?** _Probably not_, but it depends on your
+use case. A garbage collector is nice in certain scenarios, can make
+implementing certain data structures easier (particularly immutable ones),
+etc. The nice thing about Zig is you can choose what you want and don't
+want in the garbage collector.
+
 ## Example
 
 ```zig
 const std = @import("std");
-const GcAllocator = @import("gc").GcAllocator;
+const gc = @import("gc");
+const GcAllocator = gc.GcAllocator;
 
 /// Example is a F to C conversion from zig.news. The only argument is
 /// temperature in farenheight and then it outputs in celsius.
 pub fn main() !void {
-    var alloc = GcAllocator.allocator();
+    var alloc = gc.allocator();
 
     // We'll write to the terminal
     const stdout = std.io.getStdOut().writer();
 
     // Compare the output by enabling/disabling
-    // GcAllocator.disable();
+    // gc.disable();
 
     // Allocate a bunch of stuff and never free it, outputting
     // the heap size along the way. When the GC is enabled,
@@ -31,7 +38,7 @@ pub fn main() !void {
         var q = try alloc.alloc(u8, @sizeOf(u8));
         p.* = @ptrCast(*u8, alloc.resize(q, 2 * @sizeOf(u8)).?);
         if (i % 100_000 == 0) {
-            const heap = GcAllocator.getHeapSize();
+            const heap = gc.getHeapSize();
             try stdout.print("heap size: {d}\n", .{heap});
         }
     }

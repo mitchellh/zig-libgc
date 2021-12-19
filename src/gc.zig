@@ -8,6 +8,38 @@ const gc = @cImport({
     @cInclude("gc.h");
 });
 
+/// Returns the Allocator used for APIs in Zig
+pub fn allocator() Allocator {
+    // Initialize libgc
+    if (gc.GC_is_init_called() == 0) {
+        gc.GC_init();
+    }
+
+    return Allocator{
+        .ptr = undefined,
+        .vtable = &gc_allocator_vtable,
+    };
+}
+
+/// Returns the current heap size of used memory.
+pub fn getHeapSize() u64 {
+    return gc.GC_get_heap_size();
+}
+
+/// Disable garbage collection.
+pub fn disable() void {
+    gc.GC_disable();
+}
+
+/// Enables garbage collection. GC is enabled by default so this is
+/// only useful if you called disable earlier.
+pub fn enable() void {
+    gc.GC_enable();
+}
+
+// TODO(mitchellh): there are so many more functions to add here
+// from gc.h, just add em as they're useful.
+
 /// GcAllocator is an implementation of std.mem.Allocator that uses
 /// libgc under the covers. This means that all memory allocated with
 /// this allocated doesn't need to be explicitly freed (but can be).
@@ -20,32 +52,6 @@ const gc = @cImport({
 // since libgc has a malloc/free-style interface. There are very slight differences
 // due to API differences but overall the same.
 pub const GcAllocator = struct {
-    /// Returns the Allocator used for APIs in Zig
-    pub fn allocator() Allocator {
-        // Initialize libgc
-        if (gc.GC_is_init_called() == 0) {
-            gc.GC_init();
-        }
-
-        return Allocator{ .ptr = undefined, .vtable = &gc_allocator_vtable };
-    }
-
-    /// Returns the current heap size of used memory.
-    pub fn getHeapSize() u64 {
-        return gc.GC_get_heap_size();
-    }
-
-    /// Disable garbage collection.
-    pub fn disable() void {
-        gc.GC_disable();
-    }
-
-    /// Enables garbage collection. GC is enabled by default so this is
-    /// only useful if you called disable earlier.
-    pub fn enable() void {
-        gc.GC_enable();
-    }
-
     fn alloc(
         _: *c_void,
         len: usize,
@@ -140,14 +146,14 @@ const gc_allocator_vtable = Allocator.VTable{
 };
 
 test "GcAllocator" {
-    const allocator = GcAllocator.allocator();
+    const alloc = allocator();
 
-    try std.heap.testAllocator(allocator);
-    try std.heap.testAllocatorAligned(allocator);
-    try std.heap.testAllocatorLargeAlignment(allocator);
-    try std.heap.testAllocatorAlignedShrink(allocator);
+    try std.heap.testAllocator(alloc);
+    try std.heap.testAllocatorAligned(alloc);
+    try std.heap.testAllocatorLargeAlignment(alloc);
+    try std.heap.testAllocatorAlignedShrink(alloc);
 }
 
 test "heap size" {
-    try testing.expect(GcAllocator.getHeapSize() > 0);
+    try testing.expect(getHeapSize() > 0);
 }
