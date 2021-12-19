@@ -27,12 +27,34 @@ pub fn build(b: *Builder) void {
         gc_step.dependOn(&gc.step);
     }
 
+    // lib for zig
+    const lib = b.addStaticLibrary("gc", "src/gc.zig");
+    {
+        lib.setBuildMode(mode);
+
+        var main_tests = b.addTest("src/gc.zig");
+        main_tests.setBuildMode(mode);
+        main_tests.linkLibC();
+        main_tests.addIncludeDir("vendor/bdwgc/include");
+        main_tests.linkLibrary(gc);
+
+        const test_step = b.step("test", "Run library tests");
+        test_step.dependOn(&main_tests.step);
+
+        b.default_step.dependOn(&lib.step);
+        b.installArtifact(lib);
+    }
+
     // example app
     const exe = b.addExecutable("example", "example/basic.zig");
     {
         exe.linkLibC();
         exe.addIncludeDir("vendor/bdwgc/include");
         exe.linkLibrary(gc);
+        exe.addPackage(.{
+            .name = "gc",
+            .path = .{ .path = "src/gc.zig" },
+        });
         exe.install();
 
         const install_cmd = b.addInstallArtifact(exe);
