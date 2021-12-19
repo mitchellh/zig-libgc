@@ -12,34 +12,42 @@ const gc = @cImport({
 /// libgc under the covers. This means that all memory allocated with
 /// this allocated doesn't need to be explicitly freed (but can be).
 ///
+/// The GC is a singleton that is globally shared. Multiple GcAllocators
+/// do not allocate separate pages of memory; they share the same underlying
+/// pages.
+///
 // NOTE(mitchellh): this is basically just a copy of the standard CAllocator
 // since libgc has a malloc/free-style interface. There are very slight differences
 // due to API differences but overall the same.
 pub const GcAllocator = struct {
-    // Can't be zero-sized for Allocator.init. We can use a static global
-    // allocator and vtable like they do in heap.zig but for now just do this.
-    data: bool = true,
-
-    pub fn init() GcAllocator {
+    /// Returns the Allocator used for APIs in Zig
+    pub fn allocator() Allocator {
         // Initialize libgc
         if (gc.GC_is_init_called() == 0) {
             gc.GC_init();
         }
 
-        return .{};
+        return Allocator{ .ptr = undefined, .vtable = &gc_allocator_vtable };
     }
 
-    pub fn deinit(_: *GcAllocator) void {
-        // Nothing today, but maybe something one day.
+    /// Returns the current heap size of used memory.
+    pub fn getHeapSize() u64 {
+        return gc.GC_get_heap_size();
     }
 
-    /// Returns the Allocator used for APIs in Zig
-    pub fn allocator(self: *GcAllocator) Allocator {
-        return Allocator.init(self, alloc, resize, free);
+    /// Disable garbage collection.
+    pub fn disable() void {
+        gc.GC_disable();
+    }
+
+    /// Enables garbage collection. GC is enabled by default so this is
+    /// only useful if you called disable earlier.
+    pub fn enable() void {
+        gc.GC_enable();
     }
 
     fn alloc(
-        _: *GcAllocator,
+        _: *c_void,
         len: usize,
         alignment: u29,
         len_align: u29,
@@ -64,7 +72,7 @@ pub const GcAllocator = struct {
     }
 
     fn resize(
-        _: *GcAllocator,
+        _: *c_void,
         buf: []u8,
         buf_align: u29,
         new_len: usize,
@@ -86,7 +94,7 @@ pub const GcAllocator = struct {
     }
 
     fn free(
-        _: *GcAllocator,
+        _: *c_void,
         buf: []u8,
         buf_align: u29,
         return_address: usize,
@@ -125,12 +133,21 @@ pub const GcAllocator = struct {
     }
 };
 
+const gc_allocator_vtable = Allocator.VTable{
+    .alloc = GcAllocator.alloc,
+    .resize = GcAllocator.resize,
+    .free = GcAllocator.free,
+};
+
 test "GcAllocator" {
-    var gc_allocator = std.mem.validationWrap(GcAllocator.init());
-    const allocator = gc_allocator.allocator();
+    const allocator = GcAllocator.allocator();
 
     try std.heap.testAllocator(allocator);
     try std.heap.testAllocatorAligned(allocator);
     try std.heap.testAllocatorLargeAlignment(allocator);
     try std.heap.testAllocatorAlignedShrink(allocator);
+}
+
+test "heap size" {
+    try testing.expect(GcAllocator.getHeapSize() > 0);
 }
