@@ -18,9 +18,9 @@ pub fn build(b: *Builder) void {
 
         gc.setBuildMode(mode);
         gc.linkLibC();
-        gc.addIncludeDir("lib/bdwgc/include");
+        gc.addIncludeDir("vendor/bdwgc/include");
         inline for (libgc_srcs) |src| {
-            gc.addCSourceFile("lib/bdwgc/" ++ src, &cflags);
+            gc.addCSourceFile("vendor/bdwgc/" ++ src, &cflags);
         }
 
         const gc_step = b.step("libgc", "build libgc");
@@ -31,7 +31,7 @@ pub fn build(b: *Builder) void {
     const exe = b.addExecutable("example", "example/basic.zig");
     {
         exe.linkLibC();
-        exe.addIncludeDir("lib/bdwgc/include");
+        exe.addIncludeDir("vendor/bdwgc/include");
         exe.linkLibrary(gc);
         exe.install();
 
