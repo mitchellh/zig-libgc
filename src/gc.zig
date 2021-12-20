@@ -37,9 +37,20 @@ pub fn enable() void {
     gc.GC_enable();
 }
 
+// Performs a full, stop-the-world garbage collection. With leak detection
+// enabled this will output any leaks as well.
+pub fn collect() void {
+    gc.GC_gcollect();
+}
+
 /// Perform some garbage collection. Returns zero when work is done.
-pub fn collect_a_little() u8 {
+pub fn collectLittle() u8 {
     return @intCast(u8, gc.GC_collect_a_little());
+}
+
+/// Enables leak-finding mode. See the libgc docs for more details.
+pub fn setFindLeak(v: bool) void {
+    return gc.GC_set_find_leak(@boolToInt(v));
 }
 
 // TODO(mitchellh): there are so many more functions to add here
@@ -161,7 +172,10 @@ test "GcAllocator" {
 
 test "heap size" {
     // No garbage so should be 0
-    try testing.expect(collect_a_little() == 0);
+    try testing.expect(collectLittle() == 0);
+
+    // Force a collection should work
+    collect();
 
     try testing.expect(getHeapSize() > 0);
 }
