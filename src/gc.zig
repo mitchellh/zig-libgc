@@ -37,6 +37,11 @@ pub fn enable() void {
     gc.GC_enable();
 }
 
+/// Perform some garbage collection. Returns zero when work is done.
+pub fn collect_a_little() u8 {
+    return @intCast(u8, gc.GC_collect_a_little());
+}
+
 // TODO(mitchellh): there are so many more functions to add here
 // from gc.h, just add em as they're useful.
 
@@ -155,5 +160,8 @@ test "GcAllocator" {
 }
 
 test "heap size" {
+    // No garbage so should be 0
+    try testing.expect(collect_a_little() == 0);
+
     try testing.expect(getHeapSize() > 0);
 }
