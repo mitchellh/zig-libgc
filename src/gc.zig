@@ -69,59 +69,44 @@ pub fn setFindLeak(v: bool) void {
 // due to API differences but overall the same.
 pub const GcAllocator = struct {
     fn alloc(
-        _: *c_void,
+        _: *anyopaque,
         len: usize,
-        alignment: u29,
-        len_align: u29,
+        log2_align: u8,
         return_address: usize,
-    ) error{OutOfMemory}![]u8 {
+    ) ?[*]u8 {
         _ = return_address;
         assert(len > 0);
-        assert(std.math.isPowerOfTwo(alignment));
-
-        var ptr = alignedAlloc(len, alignment) orelse return error.OutOfMemory;
-        if (len_align == 0) {
-            return ptr[0..len];
-        }
-
-        const full_len = init: {
-            const s = alignedAllocSize(ptr);
-            assert(s >= len);
-            break :init s;
-        };
-
-        return ptr[0..mem.alignBackwardAnyAlign(full_len, len_align)];
+        return alignedAlloc(len, log2_align);
     }
 
     fn resize(
-        _: *c_void,
+        _: *anyopaque,
         buf: []u8,
-        buf_align: u29,
+        log2_buf_align: u8,
         new_len: usize,
-        len_align: u29,
         return_address: usize,
-    ) ?usize {
-        _ = buf_align;
+    ) bool {
+        _ = log2_buf_align;
         _ = return_address;
         if (new_len <= buf.len) {
-            return mem.alignAllocLen(buf.len, new_len, len_align);
+            return true;
         }
 
         const full_len = alignedAllocSize(buf.ptr);
         if (new_len <= full_len) {
-            return mem.alignAllocLen(full_len, new_len, len_align);
+            return true;
         }
 
-        return null;
+        return false;
     }
 
     fn free(
-        _: *c_void,
+        _: *anyopaque,
         buf: []u8,
-        buf_align: u29,
+        log2_buf_align: u8,
         return_address: usize,
     ) void {
-        _ = buf_align;
+        _ = log2_buf_align;
         _ = return_address;
         alignedFree(buf.ptr);
     }
@@ -130,7 +115,9 @@ pub const GcAllocator = struct {
         return @intToPtr(*[*]u8, @ptrToInt(ptr) - @sizeOf(usize));
     }
 
-    fn alignedAlloc(len: usize, alignment: usize) ?[*]u8 {
+    fn alignedAlloc(len: usize, log2_align: u8) ?[*]u8 {
+        const alignment = @as(usize, 1) << @intCast(Allocator.Log2Align, log2_align);
+
         // Thin wrapper around regular malloc, overallocate to account for
         // alignment padding and store the orignal malloc()'ed pointer before
         // the aligned address.

@@ -19,7 +19,8 @@ pub fn main() !void {
     while (i < 10_000_000) : (i += 1) {
         var p = @ptrCast(**u8, try alloc.alloc(*u8, @sizeOf(*u8)));
         var q = try alloc.alloc(u8, @sizeOf(u8));
-        p.* = @ptrCast(*u8, alloc.resize(q, 2 * @sizeOf(u8)).?);
+        p.* = @ptrCast(*u8, q);
+        _ = alloc.resize(q, 2 * @sizeOf(u8));
         if (i % 100_000 == 0) {
             const heap = gc.getHeapSize();
             try stdout.print("heap size: {d}\n", .{heap});
