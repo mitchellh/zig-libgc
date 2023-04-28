@@ -1,10 +1,15 @@
-const Builder = @import("std").build.Builder;
+const std = @import("std");
 
-pub fn build(b: *Builder) void {
-    const mode = b.standardReleaseOptions();
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
 
     // libgc
-    const gc = b.addStaticLibrary("gc", null);
+    const gc = b.addStaticLibrary(.{
+        .name = "gc",
+        .target = target,
+        .optimize = optimize,
+    });
     {
         // TODO(mitchellh): support more complex features that are usually on
         // with libgc like threading, parallelization, etc.
@@ -16,9 +21,8 @@ pub fn build(b: *Builder) void {
             "mallocx.c",
         };
 
-        gc.setBuildMode(mode);
         gc.linkLibC();
-        gc.addIncludeDir("vendor/bdwgc/include");
+        gc.addIncludePath("vendor/bdwgc/include");
         inline for (libgc_srcs) |src| {
             gc.addCSourceFile("vendor/bdwgc/" ++ src, &cflags);
         }
@@ -28,14 +32,20 @@ pub fn build(b: *Builder) void {
     }
 
     // lib for zig
-    const lib = b.addStaticLibrary("gc", "src/gc.zig");
+    const lib = b.addStaticLibrary(.{
+        .name = "gc",
+        .root_source_file = .{ .path = "src/gc.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
     {
-        lib.setBuildMode(mode);
-
-        var main_tests = b.addTest("src/gc.zig");
-        main_tests.setBuildMode(mode);
+        var main_tests = b.addTest(.{
+            .root_source_file = .{ .path = "src/gc.zig" },
+            .target = target,
+            .optimize = optimize,
+        });
         main_tests.linkLibC();
-        main_tests.addIncludeDir("vendor/bdwgc/include");
+        main_tests.addIncludePath("vendor/bdwgc/include");
         main_tests.linkLibrary(gc);
 
         const test_step = b.step("test", "Run library tests");
@@ -45,22 +55,26 @@ pub fn build(b: *Builder) void {
         b.installArtifact(lib);
     }
 
+    const module = b.createModule(.{
+        .source_file = .{ .path = "src/gc.zig" },
+    });
+
     // example app
-    const exe = b.addExecutable("example", "example/basic.zig");
+    const exe = b.addExecutable(.{
+        .name = "example",
+        .root_source_file = .{ .path = "example/basic.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
     {
         exe.linkLibC();
-        exe.addIncludeDir("vendor/bdwgc/include");
+        exe.addIncludePath("vendor/bdwgc/include");
         exe.linkLibrary(gc);
-        exe.addPackage(.{
-            .name = "gc",
-            .path = .{ .path = "src/gc.zig" },
-        });
-        exe.install();
+        exe.addModule("gc", module);
+        b.installArtifact(exe);
 
-        const install_cmd = b.addInstallArtifact(exe);
-
-        const run_cmd = exe.run();
-        run_cmd.step.dependOn(&install_cmd.step);
+        const run_cmd = b.addRunArtifact(exe);
+        run_cmd.step.dependOn(b.getInstallStep());
         if (b.args) |args| {
             run_cmd.addArgs(args);
         }
