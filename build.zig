@@ -13,7 +13,12 @@ pub fn build(b: *std.Build) void {
     {
         // TODO(mitchellh): support more complex features that are usually on
         // with libgc like threading, parallelization, etc.
-        const cflags = [_][]const u8{};
+        const cflags_wasi = [_][]const u8{
+            "-D__wasi__",
+            "-D_WASI_EMULATED_SIGNAL",
+            "-Wl,wasi-emulated-signal",
+        };
+        const cflags = if (target.getOsTag() == .wasi) &cflags_wasi else &[_][]const u8{};
         const libgc_srcs = [_][]const u8{
             "alloc.c",    "reclaim.c", "allchblk.c", "misc.c",     "mach_dep.c", "os_dep.c",
             "mark_rts.c", "headers.c", "mark.c",     "obj_map.c",  "blacklst.c", "finalize.c",
@@ -24,7 +29,7 @@ pub fn build(b: *std.Build) void {
         gc.linkLibC();
         gc.addIncludePath("vendor/bdwgc/include");
         inline for (libgc_srcs) |src| {
-            gc.addCSourceFile("vendor/bdwgc/" ++ src, &cflags);
+            gc.addCSourceFile("vendor/bdwgc/" ++ src, cflags);
         }
 
         const gc_step = b.step("libgc", "build libgc");
