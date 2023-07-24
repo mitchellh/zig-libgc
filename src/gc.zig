@@ -21,6 +21,12 @@ pub fn allocator() Allocator {
     };
 }
 
+/// Enable or disable interior pointers.
+/// If used, this must be called before the first allocator() call.
+pub fn setAllInteriorPointers(enable_interior_pointers: bool) void {
+    gc.GC_set_all_interior_pointers(@intFromBool(enable_interior_pointers));
+}
+
 /// Returns the current heap size of used memory.
 pub fn getHeapSize() u64 {
     return gc.GC_get_heap_size();
@@ -45,12 +51,12 @@ pub fn collect() void {
 
 /// Perform some garbage collection. Returns zero when work is done.
 pub fn collectLittle() u8 {
-    return @intCast(u8, gc.GC_collect_a_little());
+    return @as(u8, @intCast(gc.GC_collect_a_little()));
 }
 
 /// Enables leak-finding mode. See the libgc docs for more details.
 pub fn setFindLeak(v: bool) void {
-    return gc.GC_set_find_leak(@boolToInt(v));
+    return gc.GC_set_find_leak(@intFromBool(v));
 }
 
 // TODO(mitchellh): there are so many more functions to add here
@@ -112,18 +118,18 @@ pub const GcAllocator = struct {
     }
 
     fn getHeader(ptr: [*]u8) *[*]u8 {
-        return @intToPtr(*[*]u8, @ptrToInt(ptr) - @sizeOf(usize));
+        return @as(*[*]u8, @ptrFromInt(@intFromPtr(ptr) - @sizeOf(usize)));
     }
 
     fn alignedAlloc(len: usize, log2_align: u8) ?[*]u8 {
-        const alignment = @as(usize, 1) << @intCast(Allocator.Log2Align, log2_align);
+        const alignment = @as(usize, 1) << @as(Allocator.Log2Align, @intCast(log2_align));
 
         // Thin wrapper around regular malloc, overallocate to account for
         // alignment padding and store the orignal malloc()'ed pointer before
         // the aligned address.
-        var unaligned_ptr = @ptrCast([*]u8, gc.GC_malloc(len + alignment - 1 + @sizeOf(usize)) orelse return null);
-        const unaligned_addr = @ptrToInt(unaligned_ptr);
-        const aligned_addr = mem.alignForward(unaligned_addr + @sizeOf(usize), alignment);
+        var unaligned_ptr = @as([*]u8, @ptrCast(gc.GC_malloc(len + alignment - 1 + @sizeOf(usize)) orelse return null));
+        const unaligned_addr = @intFromPtr(unaligned_ptr);
+        const aligned_addr = mem.alignForward(usize, unaligned_addr + @sizeOf(usize), alignment);
         var aligned_ptr = unaligned_ptr + (aligned_addr - unaligned_addr);
         getHeader(aligned_ptr).* = unaligned_ptr;
 
@@ -137,7 +143,7 @@ pub const GcAllocator = struct {
 
     fn alignedAllocSize(ptr: [*]u8) usize {
         const unaligned_ptr = getHeader(ptr).*;
-        const delta = @ptrToInt(ptr) - @ptrToInt(unaligned_ptr);
+        const delta = @intFromPtr(ptr) - @intFromPtr(unaligned_ptr);
         return gc.GC_size(unaligned_ptr) - delta;
     }
 };

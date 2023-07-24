@@ -22,6 +22,11 @@ pub fn build(b: *std.Build) void {
         };
 
         gc.linkLibC();
+
+        if (target.isDarwin()) {
+            gc.linkFramework("Foundation");
+        }
+
         gc.addIncludePath("vendor/bdwgc/include");
         inline for (libgc_srcs) |src| {
             gc.addCSourceFile("vendor/bdwgc/" ++ src, &cflags);
