@@ -13,13 +13,16 @@ pub const ALLOCATOR = Allocator{
     .vtable = &gc_allocator_vtable,
 };
 
-/// Returns the Allocator used for APIs in Zig
-pub fn allocator() Allocator {
-    // Initialize libgc
+/// Initialize libgc
+pub fn init() void {
     if (c.GC_is_init_called() == 0) {
         c.GC_init();
     }
+}
 
+/// Returns the Allocator used for APIs in Zig
+pub fn allocator() Allocator {
+    init();
     return ALLOCATOR;
 }
 
