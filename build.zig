@@ -1,4 +1,5 @@
 const std = @import("std");
+const LazyPath = std.Build.LazyPath;
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -27,18 +28,19 @@ pub fn build(b: *std.Build) void {
             gc.linkFramework("Foundation");
         }
 
-        gc.addIncludePath("vendor/bdwgc/include");
+        gc.addIncludePath(LazyPath.relative("vendor/bdwgc/include"));
         inline for (libgc_srcs) |src| {
-            gc.addCSourceFile("vendor/bdwgc/" ++ src, &cflags);
+            gc.addCSourceFile(.{ .file = LazyPath.relative("vendor/bdwgc/" ++ src), .flags = &cflags });
         }
 
         const gc_step = b.step("libgc", "build libgc");
         gc_step.dependOn(&gc.step);
     }
+    b.installArtifact(gc);
 
     // lib for zig
     const lib = b.addStaticLibrary(.{
-        .name = "gc",
+        .name = "gczig",
         .root_source_file = .{ .path = "src/gc.zig" },
         .target = target,
         .optimize = optimize,
@@ -50,7 +52,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
         main_tests.linkLibC();
-        main_tests.addIncludePath("vendor/bdwgc/include");
+        main_tests.addIncludePath(LazyPath.relative("vendor/bdwgc/include"));
         main_tests.linkLibrary(gc);
 
         const test_step = b.step("test", "Run library tests");
@@ -60,7 +62,7 @@ pub fn build(b: *std.Build) void {
         b.installArtifact(lib);
     }
 
-    const module = b.createModule(.{
+    const module = b.addModule("gc", .{
         .source_file = .{ .path = "src/gc.zig" },
     });
 
@@ -73,7 +75,7 @@ pub fn build(b: *std.Build) void {
     });
     {
         exe.linkLibC();
-        exe.addIncludePath("vendor/bdwgc/include");
+        exe.addIncludePath(LazyPath.relative("vendor/bdwgc/include"));
         exe.linkLibrary(gc);
         exe.addModule("gc", module);
         b.installArtifact(exe);

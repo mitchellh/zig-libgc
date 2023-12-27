@@ -4,59 +4,64 @@ const testing = std.testing;
 const mem = std.mem;
 const Allocator = std.mem.Allocator;
 
-const gc = @cImport({
+pub const c = @cImport({
     @cInclude("gc.h");
 });
 
+pub const ALLOCATOR = Allocator{
+    .ptr = undefined,
+    .vtable = &gc_allocator_vtable,
+};
+
+/// Initialize libgc
+pub fn init() void {
+    if (c.GC_is_init_called() == 0) {
+        c.GC_init();
+    }
+}
+
 /// Returns the Allocator used for APIs in Zig
 pub fn allocator() Allocator {
-    // Initialize libgc
-    if (gc.GC_is_init_called() == 0) {
-        gc.GC_init();
-    }
-
-    return Allocator{
-        .ptr = undefined,
-        .vtable = &gc_allocator_vtable,
-    };
+    init();
+    return ALLOCATOR;
 }
 
 /// Enable or disable interior pointers.
 /// If used, this must be called before the first allocator() call.
 pub fn setAllInteriorPointers(enable_interior_pointers: bool) void {
-    gc.GC_set_all_interior_pointers(@intFromBool(enable_interior_pointers));
+    c.GC_set_all_interior_pointers(@intFromBool(enable_interior_pointers));
 }
 
 /// Returns the current heap size of used memory.
 pub fn getHeapSize() u64 {
-    return gc.GC_get_heap_size();
+    return c.GC_get_heap_size();
 }
 
 /// Disable garbage collection.
 pub fn disable() void {
-    gc.GC_disable();
+    c.GC_disable();
 }
 
 /// Enables garbage collection. GC is enabled by default so this is
 /// only useful if you called disable earlier.
 pub fn enable() void {
-    gc.GC_enable();
+    c.GC_enable();
 }
 
 // Performs a full, stop-the-world garbage collection. With leak detection
 // enabled this will output any leaks as well.
 pub fn collect() void {
-    gc.GC_gcollect();
+    c.GC_gcollect();
 }
 
 /// Perform some garbage collection. Returns zero when work is done.
 pub fn collectLittle() u8 {
-    return @as(u8, @intCast(gc.GC_collect_a_little()));
+    return @as(u8, @intCast(c.GC_collect_a_little()));
 }
 
 /// Enables leak-finding mode. See the libgc docs for more details.
 pub fn setFindLeak(v: bool) void {
-    return gc.GC_set_find_leak(@intFromBool(v));
+    return c.GC_set_find_leak(@intFromBool(v));
 }
 
 // TODO(mitchellh): there are so many more functions to add here
@@ -81,8 +86,9 @@ pub const GcAllocator = struct {
         return_address: usize,
     ) ?[*]u8 {
         _ = return_address;
-        assert(len > 0);
-        return alignedAlloc(len, log2_align);
+        const alignment = @as(usize, 1) << @as(Allocator.Log2Align, @intCast(log2_align));
+        const ptr = c.GC_memalign(alignment, len + alignment - 1 + @sizeOf(usize));
+        return @ptrCast(ptr);
     }
 
     fn resize(
@@ -94,16 +100,8 @@ pub const GcAllocator = struct {
     ) bool {
         _ = log2_buf_align;
         _ = return_address;
-        if (new_len <= buf.len) {
-            return true;
-        }
-
-        const full_len = alignedAllocSize(buf.ptr);
-        if (new_len <= full_len) {
-            return true;
-        }
-
-        return false;
+        const full_len = c.GC_size(buf.ptr);
+        return new_len <= full_len;
     }
 
     fn free(
@@ -114,37 +112,7 @@ pub const GcAllocator = struct {
     ) void {
         _ = log2_buf_align;
         _ = return_address;
-        alignedFree(buf.ptr);
-    }
-
-    fn getHeader(ptr: [*]u8) *[*]u8 {
-        return @as(*[*]u8, @ptrFromInt(@intFromPtr(ptr) - @sizeOf(usize)));
-    }
-
-    fn alignedAlloc(len: usize, log2_align: u8) ?[*]u8 {
-        const alignment = @as(usize, 1) << @as(Allocator.Log2Align, @intCast(log2_align));
-
-        // Thin wrapper around regular malloc, overallocate to account for
-        // alignment padding and store the orignal malloc()'ed pointer before
-        // the aligned address.
-        var unaligned_ptr = @as([*]u8, @ptrCast(gc.GC_malloc(len + alignment - 1 + @sizeOf(usize)) orelse return null));
-        const unaligned_addr = @intFromPtr(unaligned_ptr);
-        const aligned_addr = mem.alignForward(usize, unaligned_addr + @sizeOf(usize), alignment);
-        var aligned_ptr = unaligned_ptr + (aligned_addr - unaligned_addr);
-        getHeader(aligned_ptr).* = unaligned_ptr;
-
-        return aligned_ptr;
-    }
-
-    fn alignedFree(ptr: [*]u8) void {
-        const unaligned_ptr = getHeader(ptr).*;
-        gc.GC_free(unaligned_ptr);
-    }
-
-    fn alignedAllocSize(ptr: [*]u8) usize {
-        const unaligned_ptr = getHeader(ptr).*;
-        const delta = @intFromPtr(ptr) - @intFromPtr(unaligned_ptr);
-        return gc.GC_size(unaligned_ptr) - delta;
+        c.GC_free(buf.ptr);
     }
 };
 
