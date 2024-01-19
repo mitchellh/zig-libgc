@@ -24,7 +24,9 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
         main_tests.linkLibC();
-        main_tests.addIncludePath(.{ .path = "vendor/bdwgc/include" });
+    for(gc.root_module.include_dirs.items) | include | {
+        main_tests.addIncludePath(include);
+    }
         main_tests.linkLibrary(gc);
 
         const test_step = b.step("test", "Run library tests");
@@ -47,7 +49,9 @@ pub fn build(b: *std.Build) void {
     });
     {
         exe.linkLibC();
-        exe.addIncludePath(.{ .path = "vendor/bdwgc/include" });
+    for(gc.root_module.include_dirs.items) | include | {
+        exe.addIncludePath(include);
+    }
         exe.linkLibrary(gc);
         exe.root_module.addImport("gc", module);
         b.installArtifact(exe);
