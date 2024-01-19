@@ -17,8 +17,8 @@ pub fn main() !void {
     // it'll stabilize at a certain size.
     var i: u64 = 0;
     while (i < 10_000_000) : (i += 1) {
-        var p: **u8 = @ptrCast(try alloc.alloc(*u8, @sizeOf(*u8)));
-        var q = try alloc.alloc(u8, @sizeOf(u8));
+        const p: **u8 = @ptrCast(try alloc.alloc(*u8, @sizeOf(*u8)));
+        const q = try alloc.alloc(u8, @sizeOf(u8));
         p.* = @ptrCast(q);
         _ = alloc.resize(q, 2 * @sizeOf(u8));
         if (i % 100_000 == 0) {
